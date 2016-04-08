@@ -42,7 +42,7 @@ func RequestOpen() {
 	ServStats.Requests.Add(NewTimedValue(time.Now(), 1))
 }
 func RequestClose() {
-	ServStats.Requests.Add(NewTimedValue(time.Now(), 1))
+	ServStats.Requests.Add(NewTimedValue(time.Now(), -1))
 
 }
 func AssignRequest() {
