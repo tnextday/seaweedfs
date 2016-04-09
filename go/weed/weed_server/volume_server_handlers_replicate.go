@@ -10,10 +10,14 @@ import (
 	"github.com/pierrec/lz4"
 )
 
-func (vs *VolumeServer) getVolumeCleanDataHandler(w http.ResponseWriter, r *http.Request) {
+func (vs *VolumeServer) getVolumeRawDataHandler(w http.ResponseWriter, r *http.Request) {
 	v, e := vs.getVolume("volume", r)
 	if v == nil {
 		http.Error(w, fmt.Sprintf("Not Found volume: %v", e), http.StatusBadRequest)
+		return
+	}
+	if origin, err := strconv.ParseBool(r.FormValue("origin")); err == nil && origin {
+		http.ServeFile(w, r, v.FileName()+".dat")
 		return
 	}
 	cr, e := v.GetVolumeCleanReader()
