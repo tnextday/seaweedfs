@@ -94,6 +94,7 @@ func (vs *VolumeServer) getVolumeRawDataHandler(w http.ResponseWriter, r *http.R
 		http.Error(w, e.Error(), http.StatusBadRequest)
 		return
 	}
+
 	if origin, err := strconv.ParseBool(r.FormValue("origin")); err == nil && origin {
 		http.ServeFile(w, r, v.FileName()+".dat")
 		return
