@@ -1,7 +1,7 @@
 sudo: false
 language: go
 go:
- - 1.5
+ - 1.5.3
  - 1.6
  - tip
 
@@ -9,7 +9,7 @@ before_install:
  - export PATH=/home/travis/gopath/bin:$PATH
 
 install:
- - go get ./go/...
+ - go get ./weed/...
 
 script:
- - go test ./go/...
+ - go test ./weed/...
