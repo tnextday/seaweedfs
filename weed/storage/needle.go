@@ -214,14 +214,10 @@ func ParseIdCookie(nid string) (uint64, uint32, error) {
 	if len(nid)%2 == 1 {
 		nid = "0" + nid
 	}
-	key_hash_bytes, khe := hex.DecodeString(nid)
-	key_hash_len := len(key_hash_bytes)
-	if khe != nil || key_hash_len <= 4 {
-		glog.V(0).Infoln("Invalid key_hash", nid, "length:", key_hash_len, "error", khe)
+	id, cookie, ok := parseKeyHash(nid)
+	if !ok {
 		return 0, 0, errors.New("Invalid key and hash:" + nid)
 	}
-	id := util.BytesToUint64(key_hash_bytes[0 : key_hash_len-4])
-	cookie := util.BytesToUint32(key_hash_bytes[key_hash_len-4 : key_hash_len])
 
 	if delta != "" {
 		if d, e := strconv.ParseUint(delta, 10, 64); e == nil {
@@ -231,6 +227,22 @@ func ParseIdCookie(nid string) (uint64, uint32, error) {
 		}
 	}
 	return id, cookie, nil
+}
+
+func parseKeyHash(keyHash string) (uint64, uint32, bool) {
+	if len(keyHash) <= 8 || len(keyHash) > 24 {
+		return 0, 0, false
+	}
+	split := len(keyHash) - 8
+	key, err := strconv.ParseUint(keyHash[:split], 16, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	hash, err := strconv.ParseUint(keyHash[split:], 16, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+	return key, uint32(hash), true
 }
 
 func ToNid(key uint64, cookie uint32) string {
