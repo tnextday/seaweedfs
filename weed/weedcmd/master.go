@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"net"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/util"
 	"github.com/chrislusf/seaweedfs/weed/weedserver"
 	"github.com/gorilla/mux"
-	"net"
 )
 
 func init() {

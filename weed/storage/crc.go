@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+
 	"github.com/klauspost/crc32"
 
 	"github.com/chrislusf/seaweedfs/weed/util"

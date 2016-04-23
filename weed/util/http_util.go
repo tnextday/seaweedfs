@@ -13,11 +13,12 @@ import (
 
 	"os"
 
+	"strconv"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/security"
 	"github.com/golang/protobuf/proto"
 	"github.com/pierrec/lz4"
-	"strconv"
 )
 
 var (
