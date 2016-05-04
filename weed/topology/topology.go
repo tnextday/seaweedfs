@@ -71,6 +71,8 @@ func (t *Topology) SetRaftServer(s raft.Server) {
 func (t *Topology) IsLeader() bool {
 	if leader, e := t.Leader(); e == nil {
 		return leader == t.GetRaftServer().Name()
+	} else {
+		glog.V(2).Infoln("Get topology leader error, ", e)
 	}
 	return false
 }

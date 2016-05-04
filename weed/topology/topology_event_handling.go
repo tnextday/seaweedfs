@@ -20,8 +20,9 @@ func (t *Topology) StartRefreshWritableVolumes() {
 	}()
 	go func() {
 		c := time.Tick(15 * time.Minute)
-		if t.IsLeader() {
-			for range c {
+
+		for range c {
+			if t.IsLeader() {
 				t.Vacuum("")
 				//				t.CheckReplicate()
 			}
