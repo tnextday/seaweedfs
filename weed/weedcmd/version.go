@@ -20,5 +20,6 @@ func runVersion(cmd *Command, args []string) bool {
 	}
 
 	fmt.Printf("version %s %s %s\n", util.VERSION, runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("build %s\n", util.BuildTime)
 	return true
 }

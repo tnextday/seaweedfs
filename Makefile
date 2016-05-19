@@ -1,8 +1,10 @@
-BINARY = weed
-OUT_DIR = bin
+BINARY=weed
+OUT_DIR=bin
 
-GO_FLAGS = #-race -v
-SOURCE_DIR = ./weed
+GO_FLAGS=# -v -race
+GO_LDFLAGS=-ldflags "-X github.com/chrislusf/seaweedfs/weed/util.VERSION=`git describe --tags` -X github.com/chrislusf/seaweedfs/weed/util.BuildTime=`date '+%Y-%m-%d_%I:%M:%S'`"
+
+SOURCE_DIR=./weed
 
 all: build
 
@@ -20,8 +22,8 @@ vet:
 
 build: fmt
 	mkdir -p $(OUT_DIR)
-	go build $(GO_FLAGS) -o $(OUT_DIR)/$(BINARY) $(SOURCE_DIR)
+	go build $(GO_LDFLAGS) $(GO_FLAGS) -o $(OUT_DIR)/$(BINARY) $(SOURCE_DIR)
 
 linux:
 	mkdir -p $(OUT_DIR)/linux-amd64
-	GOOS=linux GOARCH=amd64 go build $(GO_FLAGS) -o $(OUT_DIR)/linux-amd64/$(BINARY) $(SOURCE_DIR)
+	GOOS=linux GOARCH=amd64 go build $(GO_LDFLAGS) $(GO_FLAGS) -o $(OUT_DIR)/linux-amd64/$(BINARY) $(SOURCE_DIR)
