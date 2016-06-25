@@ -139,11 +139,13 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 		if r.FormValue("height") != "" {
 			height, _ = strconv.Atoi(r.FormValue("height"))
 		}
-		n.Data, _, _ = images.Resized(ext, n.Data, width, height)
+		if n.Data, _, _, err = images.Resized(ext, n.Data, width, height); err != nil {
+			glog.V(0).Infoln("resize image error,", err, r.URL.Path)
+		}
 	}
 
-	if e := writeResponseContent(filename, mtype, bytes.NewReader(n.Data), w, r); e != nil {
-		glog.V(2).Infoln("response write error:", e)
+	if err = writeResponseContent(filename, mtype, bytes.NewReader(n.Data), w, r); err != nil {
+		glog.V(2).Infoln("response write error:", err, r.URL.Path)
 	}
 }
 
@@ -154,7 +156,7 @@ func (vs *VolumeServer) tryHandleChunkedFile(vid storage.VolumeId, n *storage.Ne
 
 	chunkManifest, e := operation.LoadChunkManifest(n.Data, n.IsGzipped())
 	if e != nil {
-		glog.V(0).Infof("load chunked manifest (%s) error: %v", r.URL.Path, e)
+		glog.V(0).Infoln("load chunked manifest error,", e, r.URL.Path)
 		return false
 	}
 	if fileName == "" && chunkManifest.Name != "" {
@@ -180,7 +182,7 @@ func (vs *VolumeServer) tryHandleChunkedFile(vid storage.VolumeId, n *storage.Ne
 	}
 	defer chunkedFileReader.Close()
 	if e := writeResponseContent(fileName, mType, chunkedFileReader, w, r); e != nil {
-		glog.V(2).Infoln("response write error:", e)
+		glog.V(2).Infoln("response write error:", e, r.URL.Path)
 	}
 	return true
 }

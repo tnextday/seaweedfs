@@ -7,15 +7,14 @@ import (
 	"image/jpeg"
 	"image/png"
 
-	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/disintegration/imaging"
 )
 
 const defaultJpegQuality = 85
 
-func Resized(ext string, data []byte, width, height int) (resized []byte, w int, h int) {
+func Resized(ext string, data []byte, width, height int) (resized []byte, w int, h int, e error) {
 	if width == 0 && height == 0 {
-		return data, 0, 0
+		return data, 0, 0, nil
 	}
 	srcImage, _, err := image.Decode(bytes.NewReader(data))
 	if err == nil {
@@ -29,20 +28,20 @@ func Resized(ext string, data []byte, width, height int) (resized []byte, w int,
 				dstImage = imaging.Resize(srcImage, width, height, imaging.Lanczos)
 			}
 		} else {
-			return data, bounds.Dx(), bounds.Dy()
+			return data, bounds.Dx(), bounds.Dy(), nil
 		}
 		var buf bytes.Buffer
 		switch ext {
 		case ".png":
-			png.Encode(&buf, dstImage)
+			err = png.Encode(&buf, dstImage)
 		case ".jpg", ".jpeg":
-			jpeg.Encode(&buf, dstImage, &jpeg.Options{Quality: defaultJpegQuality})
+			err = jpeg.Encode(&buf, dstImage, &jpeg.Options{Quality: defaultJpegQuality})
 		case ".gif":
-			gif.Encode(&buf, dstImage, nil)
+			err = gif.Encode(&buf, dstImage, nil)
 		}
-		return buf.Bytes(), dstImage.Bounds().Dx(), dstImage.Bounds().Dy()
-	} else {
-		glog.Error(err)
+		if err == nil {
+			return buf.Bytes(), dstImage.Bounds().Dx(), dstImage.Bounds().Dy(), nil
+		}
 	}
-	return data, 0, 0
+	return data, 0, 0, err
 }

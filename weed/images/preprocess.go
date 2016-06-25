@@ -13,7 +13,7 @@ import (
 * Call this function on any file uploaded to SeaweedFS
 *
  */
-func MaybePreprocessImage(filename string, data []byte, width, height int) (resized []byte, w int, h int) {
+func MaybePreprocessImage(filename string, data []byte, width, height int) (resized []byte, w int, h int, e error) {
 	ext := filepath.Ext(filename)
 	ext = strings.ToLower(ext)
 	switch ext {
@@ -23,5 +23,5 @@ func MaybePreprocessImage(filename string, data []byte, width, height int) (resi
 		data = FixJpgOrientation(data)
 		return Resized(ext, data, width, height)
 	}
-	return data, 0, 0
+	return data, 0, 0, nil
 }

@@ -10,8 +10,10 @@ func TestResizing(t *testing.T) {
 
 	data, _ := ioutil.ReadFile(fname)
 
-	new_data, _, _ := Resized(".jpg", data, 500, 0)
-
+	new_data, _, _, e := Resized(".jpg", data, 500, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
 	ioutil.WriteFile("resized.jpg", new_data, 0644)
 }
 
