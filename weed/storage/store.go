@@ -462,8 +462,9 @@ func (s *Store) ReadRemoteNeedle(fid *FileId, collection string) (*Needle, error
 		if i, err := strconv.ParseInt(h, 16, 64); err == nil {
 			n.Checksum = CRC(i)
 			newChecksum := NewCRC(n.Data)
-			if n.Checksum != CRC(newChecksum.Value()) {
-				return nil, errors.New("CRC error! Read remote data corrupted, " + fid.String())
+			if n.Checksum != newChecksum {
+				return nil, fmt.Errorf("CRC error! Read remote data corrupted (%x!=%x), fid=%v",
+					n.Checksum, newChecksum, fid.String())
 			}
 		}
 	}

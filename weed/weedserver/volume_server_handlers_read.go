@@ -53,7 +53,7 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 		n, err = vs.store.ReadRemoteNeedle(fid, r.FormValue("collection"))
 		glog.V(4).Infoln("read remote needle", fid, "error", err)
 		if err != nil {
-			glog.V(0).Infoln("read remote error:", err, r.URL.Path)
+			glog.V(0).Infoln("read remote error:", err, ",url path:", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
