@@ -2,7 +2,7 @@ BINARY=weed
 OUT_DIR=bin
 
 GO_FLAGS=# -v -race
-GO_LDFLAGS=-ldflags "-X github.com/chrislusf/seaweedfs/weed/util.VERSION=`git describe --tags` -X github.com/chrislusf/seaweedfs/weed/util.BuildTime=`date '+%Y-%m-%d_%I:%M:%S'`"
+GO_LDFLAGS=-ldflags "-X github.com/chrislusf/seaweedfs/weed/util.VERSION=`git describe --tags` -X github.com/chrislusf/seaweedfs/weed/util.BuildTime=`date '+%Y-%m-%d_%H:%M:%S'`"
 
 SOURCE_DIR=./weed
 
