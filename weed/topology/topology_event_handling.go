@@ -63,7 +63,10 @@ func (t *Topology) SetVolumeCapacityFull(volumeInfo storage.VolumeInfo) bool {
 }
 func (t *Topology) UnRegisterDataNode(dn *DataNode) {
 	for _, v := range dn.Volumes() {
-		glog.V(0).Infoln("Removing Volume", v.Id, "from the dead volume server", dn)
+		glog.V(0).Infof("Removing Volume %v from the dead volume server %v:%v", v.Id, dn.Ip, dn.Port)
+		if glog.V(2) {
+			glog.V(2).Infoln("Removing Volume", v.Id, "from the dead volume server", dn)
+		}
 		vl := t.GetVolumeLayout(v.Collection, v.Ttl)
 		vl.SetVolumeUnavailable(dn, v.Id)
 	}
