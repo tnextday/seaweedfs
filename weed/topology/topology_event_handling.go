@@ -75,7 +75,7 @@ func (t *Topology) UnRegisterDataNode(dn *DataNode) {
 func (t *Topology) RegisterRecoveredDataNode(dn *DataNode) {
 	for _, v := range dn.Volumes() {
 		vl := t.GetVolumeLayout(v.Collection, v.Ttl)
-		if vl.IsWritable(v) {
+		if vl.IsVolumeWritable(v) {
 			vl.SetVolumeAvailable(dn, v.Id)
 		}
 	}
