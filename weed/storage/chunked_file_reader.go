@@ -50,6 +50,7 @@ func (cf *ChunkedFileReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (cf *ChunkedFileReader) readRemoteChunkNeedle(fid string, w io.Writer, offset int64) (written int64, e error) {
+	// stream data
 	fileUrl, lookupError := operation.LookupFileId(cf.Master, fid, cf.Collection, true)
 	if lookupError != nil {
 		return 0, lookupError
@@ -86,17 +87,9 @@ func (cf *ChunkedFileReader) readRemoteChunkNeedle(fid string, w io.Writer, offs
 }
 
 func (cf *ChunkedFileReader) readLocalChunkNeedle(fid *FileId, w io.Writer, offset int64) (written int64, e error) {
-	n := &Needle{
-		Id:     fid.Key,
-		Cookie: fid.Hashcode,
-	}
-	cookie := n.Cookie
-	count, e := cf.Store.ReadVolumeNeedle(fid.VolumeId, n)
-	if e != nil || count <= 0 {
+	n, e := cf.Store.ReadLocalNeedle(fid)
+	if e != nil {
 		return 0, e
-	}
-	if n.Cookie != cookie {
-		return 0, fmt.Errorf("read error: with unmaching cookie seen: %x expected: %x", cookie, n.Cookie)
 	}
 	wn, e := w.Write(n.Data[offset:])
 	return int64(wn), e

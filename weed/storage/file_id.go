@@ -10,15 +10,29 @@ import (
 type FileId struct {
 	VolumeId VolumeId
 	Key      uint64
-	Hashcode uint32
+	Cookie   uint32
 }
 
-func NewFileIdFromNeedle(VolumeId VolumeId, n *Needle) *FileId {
-	return &FileId{VolumeId: VolumeId, Key: n.Id, Hashcode: n.Cookie}
+func NewFileIdFromNeedle(vid VolumeId, n *Needle) *FileId {
+	return &FileId{VolumeId: vid, Key: n.Id, Cookie: n.Cookie}
 }
-func NewFileId(VolumeId VolumeId, Key uint64, Hashcode uint32) *FileId {
-	return &FileId{VolumeId: VolumeId, Key: Key, Hashcode: Hashcode}
+
+func NewFileIdFromNid(vid, nid string) (*FileId, error) {
+	volumeId, e := NewVolumeId(vid)
+	if e != nil {
+		return nil, e
+	}
+	key, hash, e := ParseIdCookie(nid)
+	if e != nil {
+		return nil, e
+	}
+	return &FileId{VolumeId: volumeId, Key: key, Cookie: hash}, e
 }
+
+func NewFileId(vid VolumeId, key uint64, cookie uint32) *FileId {
+	return &FileId{VolumeId: vid, Key: key, Cookie: cookie}
+}
+
 func ParseFileId(fid string) (*FileId, error) {
 	var a []string
 	if strings.Contains(fid, ",") {
@@ -34,7 +48,7 @@ func ParseFileId(fid string) (*FileId, error) {
 	vid_string, key_hash_string := a[0], a[1]
 	volumeId, _ := NewVolumeId(vid_string)
 	key, hash, e := ParseIdCookie(key_hash_string)
-	return &FileId{VolumeId: volumeId, Key: key, Hashcode: hash}, e
+	return &FileId{VolumeId: volumeId, Key: key, Cookie: hash}, e
 }
 
 func (n *FileId) String() string {
@@ -42,5 +56,5 @@ func (n *FileId) String() string {
 }
 
 func (n *FileId) Nid() string {
-	return ToNid(n.Key, n.Hashcode)
+	return ToNid(n.Key, n.Cookie)
 }

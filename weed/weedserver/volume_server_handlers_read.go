@@ -13,11 +13,6 @@ import (
 
 	"net/url"
 
-	"io/ioutil"
-
-	"encoding/json"
-	"errors"
-
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/images"
 	"github.com/chrislusf/seaweedfs/weed/operation"
@@ -28,7 +23,6 @@ import (
 var fileNameEscaper = strings.NewReplacer("\\", "\\\\", "\"", "\\\"")
 
 func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request) {
-	n := new(storage.Needle)
 	vid, nid, filename, ext, _ := parseURLPath(r.URL.Path)
 	volumeId, err := storage.NewVolumeId(vid)
 	if err != nil {
@@ -36,33 +30,30 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err = n.ParseNid(nid)
+	var (
+		n *storage.Needle
+	)
+
+	fid, err := storage.NewFileIdFromNid(vid, nid)
 	if err != nil {
 		glog.V(2).Infoln("parsing fid error:", err, r.URL.Path)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 	glog.V(4).Infoln("volume", volumeId, "reading", n)
 	if vs.store.HasVolume(volumeId) {
-		cookie := n.Cookie
-		count, e := vs.store.ReadVolumeNeedle(volumeId, n)
-		glog.V(4).Infoln("read local bytes", count, "error", e)
-		if e != nil || count <= 0 {
-			glog.V(0).Infoln("read local error:", e, r.URL.Path)
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		if n.Cookie != cookie {
-			glog.V(0).Infoln("request", r.URL.Path, "with unmaching cookie seen:", cookie, "expected:", n.Cookie, "from", r.RemoteAddr, "agent", r.UserAgent())
+		n, err = vs.store.ReadLocalNeedle(fid)
+		glog.V(4).Infoln("read local needle", fid, "error", err)
+		if err != nil {
+			glog.V(0).Infoln("read local error:", err, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 	} else if vs.ReadRemoteNeedle {
-		count, e := vs.readRemoteNeedle(volumeId.String(), n, r.FormValue("collection"))
-		glog.V(4).Infoln("read remote needle bytes", count, "error", e)
-		if e != nil || count <= 0 {
-			glog.V(2).Infoln("read remote needle error:", e, r.URL.Path)
+		n, err = vs.store.ReadRemoteNeedle(fid, r.FormValue("collection"))
+		glog.V(4).Infoln("read remote needle", fid, "error", err)
+		if err != nil {
+			glog.V(0).Infoln("read remote error:", err, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -119,13 +110,13 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 			mtype = mt
 		}
 	}
-
+	needleData := n.Data
 	if ext != ".gz" {
 		if n.IsGzipped() {
 			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 				w.Header().Set("Content-Encoding", "gzip")
 			} else {
-				if n.Data, err = operation.UnGzipData(n.Data); err != nil {
+				if needleData, err = operation.UnGzipData(needleData); err != nil {
 					glog.V(0).Infoln("ungzip error:", err, r.URL.Path)
 				}
 			}
@@ -139,12 +130,12 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 		if r.FormValue("height") != "" {
 			height, _ = strconv.Atoi(r.FormValue("height"))
 		}
-		if n.Data, _, _, err = images.Resized(ext, n.Data, width, height); err != nil {
+		if needleData, _, _, err = images.Resized(ext, needleData, width, height); err != nil {
 			glog.V(0).Infoln("resize image error,", err, r.URL.Path)
 		}
 	}
 
-	if err = writeResponseContent(filename, mtype, bytes.NewReader(n.Data), w, r); err != nil {
+	if err = writeResponseContent(filename, mtype, bytes.NewReader(needleData), w, r); err != nil {
 		glog.V(2).Infoln("response write error:", err, r.URL.Path)
 	}
 }
@@ -293,67 +284,4 @@ func writeResponseContent(filename, mimeType string, rs io.ReadSeeker, w http.Re
 	w.WriteHeader(http.StatusPartialContent)
 	_, e = io.CopyN(w, sendContent, sendSize)
 	return e
-}
-
-func (vs *VolumeServer) readRemoteNeedle(vid string, n *storage.Needle, collection string) (int, error) {
-	lookupResult, err := operation.Lookup(vs.GetMasterNode(), vid, collection)
-	glog.V(2).Infoln("volume", vid, "found on", lookupResult, "error", err)
-	if err != nil || len(lookupResult.Locations) == 0 {
-		return 0, errors.New("lookup error:" + err.Error())
-	}
-	u, _ := url.Parse(util.NormalizeUrl(lookupResult.Locations.PickForRead().Url))
-	u.Path = "/admin/sync/needle"
-	args := url.Values{
-		"volume": {vid},
-		"nid":    {n.Nid()},
-	}
-	u.RawQuery = args.Encode()
-	req, _ := http.NewRequest("GET", u.String(), nil)
-	resp, err := util.HttpDo(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	var buf []byte
-	if buf, err = ioutil.ReadAll(resp.Body); err != nil {
-		return 0, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		errMsg := strconv.Itoa(resp.StatusCode)
-		m := map[string]string{}
-		if e := json.Unmarshal(buf, &m); e == nil {
-			if s, ok := m["error"]; ok {
-				errMsg += ", " + s
-			}
-		}
-		return 0, errors.New(errMsg)
-	}
-	n.Data = buf
-	n.DataSize = uint32(len(n.Data))
-	if h := resp.Header.Get("Seaweed-Flags"); h != "" {
-		if i, err := strconv.ParseInt(h, 16, 64); err == nil {
-			n.Flags = byte(i)
-		}
-	}
-	if h := resp.Header.Get("Seaweed-Checksum"); h != "" {
-		if i, err := strconv.ParseInt(h, 16, 64); err == nil {
-			n.Checksum = storage.CRC(i)
-		}
-	}
-
-	if h := resp.Header.Get("Seaweed-LastModified"); h != "" {
-		if i, err := strconv.ParseUint(h, 16, 64); err == nil {
-			n.LastModified = i
-			n.SetHasLastModifiedDate()
-		}
-	}
-	if h := resp.Header.Get("Seaweed-Name"); h != "" {
-		n.Name = []byte(h)
-		n.SetHasName()
-	}
-	if h := resp.Header.Get("Seaweed-Mime"); h != "" {
-		n.Mime = []byte(h)
-		n.SetHasMime()
-	}
-	return int(n.DataSize), nil
 }

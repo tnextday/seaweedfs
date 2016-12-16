@@ -150,37 +150,20 @@ func (vs *VolumeServer) getVolumeRawDataHandler(w http.ResponseWriter, r *http.R
 }
 
 func (vs *VolumeServer) getNeedleHandler(w http.ResponseWriter, r *http.Request) {
-	vid, err := storage.NewVolumeId(r.FormValue("volume"))
+	fid, err := storage.NewFileIdFromNid(r.FormValue("volume"), r.FormValue("nid"))
 	if err != nil {
-		e := fmt.Errorf("parsing volume error: %v", err)
-		glog.V(2).Infoln(e)
-		writeJsonError(w, r, http.StatusBadRequest, e)
+		glog.V(2).Infoln("parsing fid error:", err, r.URL.Path)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	nid := r.FormValue("nid")
-	n := new(storage.Needle)
-	err = n.ParseNid(nid)
-	if err != nil {
-		e := fmt.Errorf("parsing fid (%s) error: %v", nid, err)
-		glog.V(2).Infoln(e)
-		writeJsonError(w, r, http.StatusBadRequest, e)
-		return
-	}
-	cookie := n.Cookie
-	count, e := vs.store.ReadVolumeNeedle(vid, n)
-	glog.V(4).Infoln("read bytes", count, "error", e)
-	if e != nil || count <= 0 {
-		e := fmt.Errorf("read needle (%v,%v) error: %v", vid, nid, err)
+	n, e := vs.store.ReadLocalNeedle(fid)
+	if e != nil {
+		e := fmt.Errorf("read needle (%v) error: %v", fid, err)
 		glog.V(2).Infoln(e)
 		writeJsonError(w, r, http.StatusNotFound, e)
 		return
 	}
-	if n.Cookie != cookie {
-		e := fmt.Errorf("request (%v,%v) with unmaching cookie seen: %v expected: %v", vid, nid, cookie, n.Cookie)
-		glog.V(2).Infoln(e)
-		writeJsonError(w, r, http.StatusNotFound, e)
-		return
-	}
+
 	w.Header().Set("Seaweed-Flags", strconv.FormatInt(int64(n.Flags), 16))
 	w.Header().Set("Seaweed-Checksum", strconv.FormatInt(int64(n.Checksum), 16))
 	if n.HasLastModifiedDate() {

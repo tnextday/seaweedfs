@@ -20,7 +20,7 @@ fmt:
 vet:
 	go vet $(SOURCE_DIR)/...
 
-build: fmt
+build:
 	mkdir -p $(OUT_DIR)
 	go build $(GO_LDFLAGS) $(GO_FLAGS) -o $(OUT_DIR)/$(BINARY) $(SOURCE_DIR)
 

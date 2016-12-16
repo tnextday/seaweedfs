@@ -55,7 +55,7 @@ func (vs *VolumeServer) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	cookie := n.Cookie
 
-	if _, ok := vs.store.ReadVolumeNeedle(volumeId, n); ok != nil {
+	if _, ok := vs.store.ReadVolumeNeedleNoCache(volumeId, n); ok != nil {
 		m := make(map[string]uint32)
 		m["size"] = 0
 		writeJsonQuiet(w, r, http.StatusNotFound, m)
@@ -114,7 +114,7 @@ func (vs *VolumeServer) batchDeleteHandler(w http.ResponseWriter, r *http.Reques
 		n.ParseNid(id_cookie)
 		glog.V(4).Infoln("batch deleting", n)
 		cookie := n.Cookie
-		if _, err := vs.store.ReadVolumeNeedle(volumeId, n); err != nil {
+		if _, err := vs.store.ReadVolumeNeedleNoCache(volumeId, n); err != nil {
 			ret = append(ret, operation.DeleteResult{
 				Fid:    fid,
 				Status: http.StatusNotFound,

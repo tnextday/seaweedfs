@@ -11,10 +11,15 @@ import (
 
 	"encoding/json"
 
+	"io/ioutil"
+	"net/http"
+	"net/url"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/operation"
 	"github.com/chrislusf/seaweedfs/weed/util"
 	"github.com/chrislusf/seaweedfs/weed/weedpb"
+	"github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -103,6 +108,7 @@ type Store struct {
 	needleMapKind   NeedleMapType
 	TaskManager     *TaskManager
 	mutex           sync.RWMutex
+	needleCache     *lru.ARCCache
 }
 
 func (s *Store) String() (str string) {
@@ -124,6 +130,12 @@ func NewStore(port int, ip, publicUrl string, dirnames []string, maxVolumeCounts
 		location := NewDiskLocation(dirnames[i], maxVolumeCounts[i])
 		location.LoadExistingVolumes(needleMapKind)
 		s.Locations = append(s.Locations, location)
+	}
+	var err error
+	//TODO evict cache by memory size
+	s.needleCache, err = lru.NewARC(200)
+	if err != nil {
+		panic(err)
 	}
 	return
 }
@@ -361,12 +373,119 @@ func (s *Store) Delete(i VolumeId, n *Needle) (uint32, error) {
 	}
 	return 0, nil
 }
-func (s *Store) ReadVolumeNeedle(i VolumeId, n *Needle) (int, error) {
+func (s *Store) ReadVolumeNeedleNoCache(i VolumeId, n *Needle) (int, error) {
 	if v := s.findVolume(i); v != nil {
 		return v.readNeedle(n)
 	}
 	return 0, fmt.Errorf("Volume %v not found!", i)
 }
+
+func (s *Store) ReadLocalNeedle(fid *FileId) (n *Needle, err error) {
+	cacheKey := fid.String()
+	if cn, cacheHit := s.needleCache.Get(cacheKey); cacheHit {
+		glog.V(2).Infoln("Local needle cache hit:", fid)
+		return cn.(*Needle), nil
+	}
+	glog.V(2).Infoln("Local needle cache miss:", fid)
+
+	if v := s.findVolume(fid.VolumeId); v != nil {
+		n = &Needle{
+			Id: fid.Key,
+		}
+		if _, err := v.readNeedle(n); err != nil {
+			return nil, err
+		}
+		if n.Cookie != fid.Cookie {
+			return nil, fmt.Errorf("request (%v,%x) with unmaching cookie seen: %x expected: %x", fid.VolumeId, fid.Key, fid.Cookie, n.Cookie)
+		}
+	} else {
+		return nil, fmt.Errorf("Volume %v not found!", fid.VolumeId)
+	}
+
+	s.needleCache.Add(cacheKey, n)
+	return n, nil
+}
+
+func (s *Store) ReadRemoteNeedle(fid *FileId, collection string) (*Needle, error) {
+	cacheKey := fid.String()
+	if cn, cacheHit := s.needleCache.Get(cacheKey); cacheHit {
+		glog.V(2).Infoln("Remote needle cache hit:", fid)
+		return cn.(*Needle), nil
+	}
+	glog.V(2).Infoln("Remote needle cache miss:", fid)
+
+	vid := fid.VolumeId.String()
+	lookupResult, err := operation.Lookup(s.GetMaster(), vid, collection)
+	glog.V(2).Infoln("volume", vid, "found on", lookupResult, "error", err)
+	if err != nil || len(lookupResult.Locations) == 0 {
+		return nil, errors.New("lookup error:" + err.Error())
+	}
+	u, _ := url.Parse(util.NormalizeUrl(lookupResult.Locations.PickForRead().Url))
+	u.Path = "/admin/sync/needle"
+	args := url.Values{
+		"volume": {vid},
+		"nid":    {fid.Nid()},
+	}
+	u.RawQuery = args.Encode()
+	req, _ := http.NewRequest("GET", u.String(), nil)
+	resp, err := util.HttpDo(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var buf []byte
+	if buf, err = ioutil.ReadAll(resp.Body); err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		errMsg := strconv.Itoa(resp.StatusCode)
+		m := map[string]string{}
+		if e := json.Unmarshal(buf, &m); e == nil {
+			if s, ok := m["error"]; ok {
+				errMsg += ", " + s
+			}
+		}
+		return nil, errors.New(errMsg)
+	}
+	n := &Needle{
+		Cookie: fid.Cookie,
+		Id:     fid.Key,
+	}
+	n.Data = buf
+	n.DataSize = uint32(len(n.Data))
+	if h := resp.Header.Get("Seaweed-Flags"); h != "" {
+		if i, err := strconv.ParseInt(h, 16, 64); err == nil {
+			n.Flags = byte(i)
+		}
+	}
+	if h := resp.Header.Get("Seaweed-Checksum"); h != "" {
+		if i, err := strconv.ParseInt(h, 16, 64); err == nil {
+			n.Checksum = CRC(i)
+			newChecksum := NewCRC(n.Data)
+			if n.Checksum != CRC(newChecksum.Value()) {
+				return nil, errors.New("CRC error! Read remote data corrupted, " + fid.String())
+			}
+		}
+	}
+
+	if h := resp.Header.Get("Seaweed-LastModified"); h != "" {
+		if i, err := strconv.ParseUint(h, 16, 64); err == nil {
+			n.LastModified = i
+			n.SetHasLastModifiedDate()
+		}
+	}
+	if h := resp.Header.Get("Seaweed-Name"); h != "" {
+		n.Name = []byte(h)
+		n.SetHasName()
+	}
+	if h := resp.Header.Get("Seaweed-Mime"); h != "" {
+		n.Mime = []byte(h)
+		n.SetHasMime()
+	}
+	s.needleCache.Add(cacheKey, n)
+	return n, nil
+}
+
 func (s *Store) GetVolume(i VolumeId) *Volume {
 	return s.findVolume(i)
 }
